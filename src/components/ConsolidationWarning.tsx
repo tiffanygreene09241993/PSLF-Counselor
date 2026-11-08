@@ -1,7 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { BorrowerProfile, LoanProgram, StudentLoan } from '../types/counselor';
 import { analyzeConsolidation, isLoanNativelyPSLFEligible } from '../utils/calculator';
-import { parseStudentAidData, SAMPLE_MY_STUDENT_DATA } from '../utils/studentAidParser';
+import {
+  parseStudentAidData,
+  parseMyStudentData,
+  ParsedStudentAidLoan,
+  SAMPLE_MY_STUDENT_DATA,
+} from '../utils/studentAidParser';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,6 +25,8 @@ import {
   FileText,
   Sparkles,
   ClipboardPaste,
+  XCircle,
+  Tag,
 } from 'lucide-react';
 
 interface ConsolidationWarningProps {
@@ -38,11 +45,21 @@ export const ConsolidationWarning: React.FC<ConsolidationWarningProps> = ({
   const analysis = analyzeConsolidation(profile.loans);
   const hasParentPlus = profile.loans.some((l) => l.program === 'Direct PLUS (Parent)');
 
+  // Weighted Payment Count & Interest Rate calculations (34 CFR § 685.209)
+  const totalBalance = profile.loans.reduce((sum, l) => sum + l.balance, 0);
+  const totalBalancePaymentsProduct = profile.loans.reduce((sum, l) => sum + (l.balance * l.qualifyingPaymentsMade), 0);
+  const weightedPaymentCount = totalBalance > 0 ? Math.round(totalBalancePaymentsProduct / totalBalance) : 0;
+  
+  const totalBalanceRateProduct = profile.loans.reduce((sum, l) => sum + (l.balance * l.interestRate), 0);
+  const rawWeightedRate = totalBalance > 0 ? (totalBalanceRateProduct / totalBalance) : 0;
+  const consolidatedInterestRate = Math.ceil(rawWeightedRate * 8) / 8;
+
   // Input method mode: 'manual' | 'file_upload'
   const [entryMode, setEntryMode] = useState<'manual' | 'file_upload'>('manual');
   const [pastedData, setPastedData] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [detailedParsedLoans, setDetailedParsedLoans] = useState<ParsedStudentAidLoan[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Loan types for quick toggle/add
@@ -161,24 +178,36 @@ export const ConsolidationWarning: React.FC<ConsolidationWarningProps> = ({
 
   // StudentAid.gov file parsing logic
   const processRawData = (text: string) => {
-    const parsedLoans = parseStudentAidData(text);
-    if (parsedLoans.length === 0) {
+    const detailed = parseMyStudentData(text);
+    if (detailed.length === 0) {
       setImportNotice('No student loan entries could be detected. Please verify the file or paste format.');
       return;
     }
 
-    const nonDirect = parsedLoans.filter((l) => !isLoanNativelyPSLFEligible(l.program));
-    const totalBalance = parsedLoans.reduce((sum, l) => sum + l.balance, 0);
+    setDetailedParsedLoans(detailed);
+
+    const mappedLoans: StudentLoan[] = detailed.map((l) => ({
+      id: l.id,
+      name: l.loanType,
+      program: l.program,
+      balance: l.balance,
+      interestRate: l.interestRate,
+      qualifyingPaymentsMade: l.cumulativePaymentCount,
+      servicer: l.servicer,
+    }));
+
+    const nonDirect = detailed.filter((l) => l.needsConsolidation);
+    const totalBalance = detailed.reduce((sum, l) => sum + l.balance, 0);
 
     onUpdateProfile({
       ...profile,
-      loans: parsedLoans,
+      loans: mappedLoans,
     });
 
     setImportNotice(
-      `Successfully extracted ${parsedLoans.length} loans ($${totalBalance.toLocaleString()}). ${
+      `Successfully extracted ${detailed.length} loan accounts ($${totalBalance.toLocaleString()}) via regex key-value extraction. ${
         nonDirect.length > 0
-          ? `${nonDirect.length} non-Direct loan(s) detected requiring consolidation.`
+          ? `${nonDirect.length} non-Direct loan(s) flagged with Disqualification Alerts below.`
           : 'All parsed loans are Direct Loans.'
       }`
     );
@@ -337,6 +366,135 @@ export const ConsolidationWarning: React.FC<ConsolidationWarningProps> = ({
         </div>
       )}
 
+      {/* Direct Consolidation Weighted Payment Counter & Interest Rate Preview Card */}
+      <div className="rounded-2xl border-2 border-indigo-900 bg-white p-6 sm:p-7 shadow-md space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-indigo-900 text-white shadow-2xs">
+                <Scale className="w-4 h-4 text-indigo-300" />
+              </span>
+              <h3 className="text-lg font-bold text-slate-950 tracking-tight">
+                Direct Consolidation Weighted Payment Counter & Interest Rate Preview
+              </h3>
+              <span className="text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                34 CFR § 685.209 Formula
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Department of Education regulations calculate your consolidated payment credit using the exact weighted balance of your loans, preserving earned qualifying months.
+            </p>
+          </div>
+        </div>
+
+        {/* Dual Metric Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card A: Weighted Payment Count */}
+          <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                Payment Count Preservation
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 font-semibold">
+                Target: 120 Payments
+              </span>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500">Projected Weighted Payment Count:</div>
+              <div className="text-3xl font-extrabold font-mono text-slate-900 mt-0.5 flex items-baseline gap-2">
+                <span>{weightedPaymentCount}</span>
+                <span className="text-sm font-semibold text-slate-500">/ 120 qualifying payments</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700 space-y-1">
+              <div className="text-slate-400 font-sans text-[10px]">Statutory Formula:</div>
+              <div>Σ(Balance_i × Payments_i) / Total Balance</div>
+              <div className="text-indigo-700">
+                = ${Math.round(totalBalancePaymentsProduct).toLocaleString()} / ${totalBalance.toLocaleString()} = {weightedPaymentCount} payments
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Under older pre-waiver rules, consolidation reset payment counts to zero. Under current permanent regulations, you retain a proportional share of every payment made.
+            </p>
+          </div>
+
+          {/* Card B: Consolidated Interest Rate */}
+          <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                Fixed Consolidation Rate
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 font-semibold">
+                Rounded up to nearest 1/8%
+              </span>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500">New Direct Consolidation Fixed Rate:</div>
+              <div className="text-3xl font-extrabold font-mono text-slate-900 mt-0.5 flex items-baseline gap-2">
+                <span>{consolidatedInterestRate.toFixed(3)}%</span>
+                <span className="text-xs font-semibold text-slate-400 font-mono">(Raw: {rawWeightedRate.toFixed(3)}%)</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700 space-y-1">
+              <div className="text-slate-400 font-sans text-[10px]">Statutory Rounding Rule:</div>
+              <div>Σ(Balance_i × Rate_i) / Total Balance rounded UP to 0.125%</div>
+              <div className="text-indigo-700">
+                = {rawWeightedRate.toFixed(3)}% → {consolidatedInterestRate.toFixed(3)}%
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Consolidation locks in a permanent fixed interest rate across all underlying loans with no prepayment penalty.
+            </p>
+          </div>
+        </div>
+
+        {/* Loan Contribution Table */}
+        {profile.loans.length > 0 && (
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-900">Portfolio Weighting Contribution by Loan</span>
+              <span className="text-[11px] font-mono text-slate-500">Total Portfolio: ${totalBalance.toLocaleString()}</span>
+            </div>
+            <div className="divide-y divide-slate-100 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50/50 text-[10px] text-slate-500 font-mono uppercase">
+                    <th className="py-2 px-4">Loan Program</th>
+                    <th className="py-2 px-3 text-right">Balance</th>
+                    <th className="py-2 px-3 text-right">Share (%)</th>
+                    <th className="py-2 px-3 text-right">Interest</th>
+                    <th className="py-2 px-3 text-right">Payments</th>
+                    <th className="py-2 px-4 text-right">Contribution</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {profile.loans.map((loan) => {
+                    const sharePct = totalBalance > 0 ? (loan.balance / totalBalance) * 100 : 0;
+                    const paymentContribution = totalBalance > 0 ? (loan.balance * loan.qualifyingPaymentsMade) / totalBalance : 0;
+                    return (
+                      <tr key={loan.id} className="hover:bg-slate-50/60">
+                        <td className="py-2.5 px-4 font-medium text-slate-900">{loan.name}</td>
+                        <td className="py-2.5 px-3 text-right font-mono">${loan.balance.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-500">{sharePct.toFixed(1)}%</td>
+                        <td className="py-2.5 px-3 text-right font-mono">{loan.interestRate}%</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-700">{loan.qualifyingPaymentsMade}</td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-indigo-700">+{paymentContribution.toFixed(1)} pmts</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Entry Mode Toggle (Manual vs StudentAid.gov Data File Support) */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -452,6 +610,75 @@ export const ConsolidationWarning: React.FC<ConsolidationWarningProps> = ({
               <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex items-start gap-2.5">
                 <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                 <div className="font-medium">{importNotice}</div>
+              </div>
+            )}
+
+            {/* Disqualification Alerts Banner */}
+            {detailedParsedLoans.filter((l) => l.needsConsolidation || l.isParentPlus).length > 0 && (
+              <div className="rounded-2xl border-2 border-rose-300 bg-rose-50/80 p-5 space-y-3 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-rose-600 text-white">
+                    <ShieldAlert className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wider">
+                      Disqualification Alerts: Loans Requiring Direct Consolidation ({detailedParsedLoans.filter((l) => l.needsConsolidation || l.isParentPlus).length})
+                    </h4>
+                    <p className="text-[11px] text-rose-800">
+                      The parser identified unconsolidated non-Direct loans in your MyStudentData.txt. Zero payments count for PSLF until consolidated on StudentAid.gov.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  {detailedParsedLoans
+                    .filter((l) => l.needsConsolidation || l.isParentPlus)
+                    .map((dl) => (
+                      <div
+                        key={dl.id}
+                        className="p-3.5 bg-white rounded-xl border border-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900">{dl.loanType}</span>
+                            <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                              {dl.awardId}
+                            </span>
+                            <span className="text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">
+                              {dl.isParentPlus ? 'Parent PLUS Restricted' : 'Consolidation Mandated'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-rose-700">
+                            {dl.disqualificationReason}
+                          </div>
+                        </div>
+
+                        <div className="text-left sm:text-right shrink-0">
+                          <span className="font-mono font-bold text-sm text-slate-900">
+                            ${dl.balance.toLocaleString()}
+                          </span>
+                          <span className="block text-[10px] text-slate-400 font-medium">
+                            {dl.servicer} · {dl.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-rose-200 text-xs">
+                  <span className="text-rose-900 text-[11px] font-semibold">
+                    Submit your consolidation application on StudentAid.gov to secure a weighted average payment count.
+                  </span>
+                  <a
+                    href="https://studentaid.gov/loan-consolidation/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-bold text-rose-900 hover:text-rose-950 underline shrink-0"
+                  >
+                    <span>Consolidate on StudentAid.gov</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
               </div>
             )}
           </div>

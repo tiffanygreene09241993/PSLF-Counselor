@@ -240,6 +240,90 @@ export const EligibilitySnapshot: React.FC<EligibilitySnapshotProps> = ({
     }
   };
 
+  // Secondary / Concurrent Employer (34 CFR § 685.219)
+  const secondaryEmployer = profile.employment[1] || null;
+  const secondaryStatus = secondaryEmployer ? getEmployerEligibilityStatus(secondaryEmployer.category) : null;
+
+  const handleAddSecondaryEmployer = () => {
+    const newSecondary: EmploymentRecord = {
+      id: `emp-secondary-${Date.now()}`,
+      employerName: 'Metropolitan Community College District',
+      ein: '43-0982311',
+      category: 'Government (Federal/State/Local/Tribal)',
+      startDate: primaryEmployer.startDate || '2021-01',
+      endDate: 'Present',
+      hoursPerWeek: 15,
+      isFullTimeCertified: false,
+    };
+
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer, newSecondary],
+    });
+  };
+
+  const handleRemoveSecondaryEmployer = () => {
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer],
+    });
+  };
+
+  const handleUpdateSecondaryHours = (hours: number) => {
+    if (!secondaryEmployer) return;
+    const updatedSecondary: EmploymentRecord = {
+      ...secondaryEmployer,
+      hoursPerWeek: hours,
+    };
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer, updatedSecondary],
+    });
+  };
+
+  const handleUpdateSecondaryName = (name: string) => {
+    if (!secondaryEmployer) return;
+    const updatedSecondary: EmploymentRecord = {
+      ...secondaryEmployer,
+      employerName: name,
+    };
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer, updatedSecondary],
+    });
+  };
+
+  const handleUpdateSecondaryEin = (ein: string) => {
+    if (!secondaryEmployer) return;
+    const updatedSecondary: EmploymentRecord = {
+      ...secondaryEmployer,
+      ein,
+    };
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer, updatedSecondary],
+    });
+  };
+
+  const handleUpdateSecondaryCategory = (category: EmployerCategory) => {
+    if (!secondaryEmployer) return;
+    const updatedSecondary: EmploymentRecord = {
+      ...secondaryEmployer,
+      category,
+    };
+    onUpdateProfile({
+      ...profile,
+      employment: [primaryEmployer, updatedSecondary],
+    });
+  };
+
+  // Combined aggregation calculations
+  const totalWeeklyHours = primaryEmployer.hoursPerWeek + (secondaryEmployer ? secondaryEmployer.hoursPerWeek : 0);
+  const isPrimaryQualifying = currentStatus.status === 'qualifies' || currentStatus.status === 'conditional';
+  const isSecondaryQualifying = secondaryStatus ? (secondaryStatus.status === 'qualifies' || secondaryStatus.status === 'conditional') : false;
+  const isConcurrentQualified = secondaryEmployer && isPrimaryQualifying && isSecondaryQualifying && totalWeeklyHours >= 30;
+  const isOverallQualified = (currentStatus.status === 'qualifies' && isFullTime) || isConcurrentQualified;
+
   return (
     <section id="step-1" className="scroll-mt-24 space-y-8">
       {/* Section Header */}
@@ -270,7 +354,12 @@ export const EligibilitySnapshot: React.FC<EligibilitySnapshotProps> = ({
 
           {/* Dynamic Verdict Badge */}
           <div className="shrink-0">
-            {currentStatus.status === 'qualifies' && isFullTime ? (
+            {isConcurrentQualified ? (
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Qualified via Concurrent Part-Time Aggregation (&ge; 30 hrs/wk)</span>
+              </span>
+            ) : currentStatus.status === 'qualifies' && isFullTime ? (
               <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>Fully Qualified Employer & Hours</span>
@@ -280,10 +369,19 @@ export const EligibilitySnapshot: React.FC<EligibilitySnapshotProps> = ({
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
                 <span>Conditional: Service Audit Required</span>
               </span>
+            ) : secondaryEmployer && totalWeeklyHours >= 30 && (!isPrimaryQualifying || !isSecondaryQualifying) ? (
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                <XCircle className="w-4 h-4 text-rose-600" />
+                <span>Ineligible: One or More Employers Non-Qualifying</span>
+              </span>
             ) : (
               <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
                 <XCircle className="w-4 h-4 text-rose-600" />
-                <span>{!isFullTime ? 'Ineligible: Under 30 Hrs/Week' : 'Ineligible Employer Tax Status'}</span>
+                <span>
+                  {totalWeeklyHours < 30
+                    ? `Ineligible: ${totalWeeklyHours} hrs/wk (Under 30 hrs/wk threshold)`
+                    : 'Ineligible Employer Tax Status'}
+                </span>
               </span>
             )}
           </div>
@@ -433,6 +531,181 @@ export const EligibilitySnapshot: React.FC<EligibilitySnapshotProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Multi-Employer Concurrent Hours Aggregator (34 CFR § 685.219) */}
+        {!secondaryEmployer ? (
+          <div className="p-5 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-indigo-600" />
+                <h4 className="text-sm font-bold text-slate-900">
+                  Work Multiple Part-Time Public Service Jobs? (Adjunct / Multi-Agency)
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 max-w-2xl">
+                Under <strong>34 CFR § 685.219</strong>, if you work part-time for two or more qualifying employers (e.g. teaching adjunct at two community colleges), you can aggregate your weekly hours to meet the 30-hour full-time threshold.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAddSecondaryEmployer}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-900 bg-white hover:bg-slate-100 rounded-xl border border-slate-300 shadow-2xs shrink-0 cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4 text-indigo-600" />
+              <span>Add Concurrent / Second Employer</span>
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/30 p-6 space-y-5">
+            {/* Secondary Employer Header */}
+            <div className="flex items-center justify-between border-b border-indigo-200/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-indigo-900 text-white shadow-2xs">
+                  <Briefcase className="w-4 h-4 text-indigo-300" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Secondary Concurrent Qualifying Employer (34 CFR § 685.219)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Aggregated with primary employer to satisfy statutory 30-hour weekly rule
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRemoveSecondaryEmployer}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:text-rose-900 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove Second Employer</span>
+              </button>
+            </div>
+
+            {/* Secondary Employer Form Inputs */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Employer Legal Name
+                </label>
+                <input
+                  type="text"
+                  value={secondaryEmployer.employerName}
+                  onChange={(e) => handleUpdateSecondaryName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:outline-hidden font-medium"
+                  placeholder="e.g. County Community College"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Federal EIN (from W-2 Box b)
+                </label>
+                <input
+                  type="text"
+                  value={secondaryEmployer.ein}
+                  onChange={(e) => handleUpdateSecondaryEin(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:outline-hidden font-mono"
+                  placeholder="XX-XXXXXXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tax Organization Category
+                </label>
+                <select
+                  value={secondaryEmployer.category}
+                  onChange={(e) => handleUpdateSecondaryCategory(e.target.value as EmployerCategory)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:outline-hidden font-medium"
+                >
+                  <option value="Government (Federal/State/Local/Tribal)">Government (Federal/State/Local/Tribal)</option>
+                  <option value="501(c)(3) Non-Profit">501(c)(3) Tax-Exempt Non-Profit</option>
+                  <option value="Other Public Service Non-Profit (Non-501c3)">Other Public Service Non-Profit (Non-501c3)</option>
+                  <option value="For-Profit / Private Commercial">For-Profit / Private Commercial (Ineligible)</option>
+                  <option value="Partisan Political / Labor Union">Partisan Political / Labor Union (Ineligible)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Secondary Hours Slider */}
+            <div className="space-y-2 pt-2 border-t border-indigo-200/60">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-semibold text-slate-700">Contracted Hours Per Week (Job #2):</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
+                  {secondaryEmployer.hoursPerWeek} hrs/wk
+                </span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="40"
+                step="1"
+                value={secondaryEmployer.hoursPerWeek}
+                onChange={(e) => handleUpdateSecondaryHours(Number(e.target.value))}
+                className="w-full accent-indigo-600 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>5 hrs</span>
+                <span>20 hrs</span>
+                <span>40 hrs</span>
+              </div>
+            </div>
+
+            {/* Dynamic Combined Hours Aggregation Meter & Statutory Badge */}
+            <div className="p-4 rounded-xl bg-white border border-indigo-200 space-y-3 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="text-xs text-slate-700">
+                  <span>Aggregated Concurrent Hours: </span>
+                  <strong className="text-slate-900 font-mono">
+                    {primaryEmployer.hoursPerWeek} hrs (Job 1) + {secondaryEmployer.hoursPerWeek} hrs (Job 2) = {totalWeeklyHours} hrs/wk Combined
+                  </strong>
+                </div>
+
+                <div className="shrink-0">
+                  {isConcurrentQualified ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Qualified via Concurrent Part-Time Aggregation (&ge; 30 hrs/wk)</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{totalWeeklyHours < 30 ? `Short by ${30 - totalWeeklyHours} hrs/wk` : 'Verify Employer Eligibility'}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress bar towards 30 hrs */}
+              <div className="space-y-1">
+                <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex">
+                  <div
+                    style={{ width: `${Math.min(100, (primaryEmployer.hoursPerWeek / 30) * 100 * 0.5)}%` }}
+                    className="bg-indigo-600 h-full"
+                    title={`Primary: ${primaryEmployer.hoursPerWeek} hrs`}
+                  />
+                  <div
+                    style={{ width: `${Math.min(100, (secondaryEmployer.hoursPerWeek / 30) * 100 * 0.5)}%` }}
+                    className="bg-emerald-500 h-full"
+                    title={`Secondary: ${secondaryEmployer.hoursPerWeek} hrs`}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>0 hrs</span>
+                  <span className="font-bold text-indigo-700">30 hrs/wk Statutory Threshold</span>
+                  <span>60+ hrs</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-600 leading-relaxed pt-1 border-t border-slate-100">
+                <strong>Statutory Standard (34 CFR § 685.219(b)):</strong> Borrowers working part-time for two or more qualifying public service entities simultaneously meet the full-time requirement if the combined total of their weekly hours is at least 30 hours. Both employers must sign an official PSLF Form covering the same certification period.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Action to proceed */}
         {onNavigateNext && (

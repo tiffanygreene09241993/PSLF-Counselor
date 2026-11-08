@@ -3,6 +3,9 @@ import { BorrowerProfile, RoadmapTaskItem } from '../types/counselor';
 import { calculateReadinessScore, generateRoadmapTasks, generateRepaymentQuotes } from '../utils/calculator';
 import { RepaymentCostBarChart } from './RepaymentCostBarChart';
 import { PslfFaqSection } from './PslfFaqSection';
+import { StateTaxExemptionChecker } from './StateTaxExemptionChecker';
+import { OfficialPslfFormCard } from './OfficialPslfFormCard';
+import { AnnualRecertificationWidget } from './AnnualRecertificationWidget';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -19,16 +22,19 @@ import {
   TrendingDown,
   DollarSign,
   Scale,
+  MapPin,
 } from 'lucide-react';
 
 interface ActionRoadmapCardProps {
   profile: BorrowerProfile;
+  onUpdateProfile?: (updated: BorrowerProfile) => void;
   onOpenReport: () => void;
   onOpenDoubleConsolidation?: () => void;
 }
 
 export const ActionRoadmapCard: React.FC<ActionRoadmapCardProps> = ({
   profile,
+  onUpdateProfile,
   onOpenReport,
   onOpenDoubleConsolidation,
 }) => {
@@ -72,6 +78,10 @@ export const ActionRoadmapCard: React.FC<ActionRoadmapCardProps> = ({
       `- Total Paid Under Statutory IBR Plan: $${ibrQuote.totalPaid120.toLocaleString()}`,
       `- Estimated Tax-Free Forgiveness: +$${ibrQuote.totalForgiven.toLocaleString()}`,
       `- Net Borrower Out-of-Pocket Savings: +$${outOfPocketSavings.toLocaleString()}`,
+      '',
+      `STATE TAX CONFORMITY ADVISORY (${profile.homeState || 'CA'}):`,
+      `- Federal PSLF is 100% tax-free under IRC § 108(f)(1).`,
+      `- State status for ${profile.homeState || 'CA'}: Conforms to federal public service tax-free exclusion.`,
       '',
       'ACTION CHECKLIST:',
       ...tasks.map((t, idx) => {
@@ -355,6 +365,12 @@ export const ActionRoadmapCard: React.FC<ActionRoadmapCardProps> = ({
           </div>
         </div>
 
+        {/* Official PSLF Certification Form Pre-Filler / PDF Exporter (OMB No. 1845-0110) */}
+        <OfficialPslfFormCard profile={profile} />
+
+        {/* IDR Annual Recertification Protection (.ics Calendar Generator) */}
+        <AnnualRecertificationWidget profile={profile} />
+
         {/* Deadlines & Annual Cadence */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
@@ -379,6 +395,19 @@ export const ActionRoadmapCard: React.FC<ActionRoadmapCardProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Interactive State Tax Exemption & Conformity Checker */}
+        <StateTaxExemptionChecker
+          selectedStateCode={profile.homeState || 'CA'}
+          onSelectState={(code) => {
+            if (onUpdateProfile) {
+              onUpdateProfile({
+                ...profile,
+                homeState: code,
+              });
+            }
+          }}
+        />
 
         {/* Card Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">

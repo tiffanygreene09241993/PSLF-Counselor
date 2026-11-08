@@ -1,6 +1,7 @@
 import React from 'react';
 import { BorrowerProfile } from '../types/counselor';
 import { analyzeConsolidation, generateRepaymentQuotes, generateRoadmapTasks } from '../utils/calculator';
+import { STATE_TAX_DATA } from '../data/stateTaxData';
 import { X, Printer, ShieldCheck, Download, CheckCircle2, AlertTriangle, FileText, Check, Scale } from 'lucide-react';
 
 interface CounselorReportModalProps {
@@ -225,6 +226,30 @@ export const CounselorReportModal: React.FC<CounselorReportModalProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Section 5: State Tax Exemption & Conformity Advisory */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-slate-950 uppercase tracking-wider border-b border-slate-200 pb-1">
+              5. State Tax Conformity Advisory ({profile.homeState || 'CA'})
+            </h2>
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900">
+                  {STATE_TAX_DATA[profile.homeState || 'CA']?.stateName || 'California'} Personal Income Tax Classification
+                </span>
+                <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                  {STATE_TAX_DATA[profile.homeState || 'CA']?.statusBadge || 'Fully Tax-Free'}
+                </span>
+              </div>
+              <p className="text-slate-700 leading-relaxed">
+                {STATE_TAX_DATA[profile.homeState || 'CA']?.notes ||
+                  'California conforms to federal gross income exclusions under IRC § 108(f). PSLF loan forgiveness is completely exempt from California personal income tax.'}
+              </p>
+              <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                <strong>State Statutory Authority:</strong> {STATE_TAX_DATA[profile.homeState || 'CA']?.legalCitation || 'Cal. Rev. & Tax. Code § 17131'} (Non-taxable under rolling IRC § 108 conformity)
+              </div>
             </div>
           </div>
 

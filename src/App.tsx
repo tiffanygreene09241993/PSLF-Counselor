@@ -172,6 +172,7 @@ export default function App() {
             <div className="space-y-10">
               <ActionRoadmapCard
                 profile={profile}
+                onUpdateProfile={setProfile}
                 onOpenReport={() => setIsReportOpen(true)}
                 onOpenDoubleConsolidation={() => setIsDoubleConsolidationOpen(true)}
               />

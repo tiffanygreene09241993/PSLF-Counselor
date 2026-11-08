@@ -363,19 +363,22 @@ export function calculateReadinessScore(profile: BorrowerProfile): {
     note: string;
   }[] = [];
 
-  // 1. Employer Qualification (35 max)
+  // 1. Employer Qualification (35 max) — 34 CFR § 685.219 (Supports Concurrent Multi-Employer Aggregation)
   const qualifyingEmployers = profile.employment.filter((e) => {
     const status = getEmployerEligibilityStatus(e.category);
-    return (status.status === 'qualifies' || status.status === 'conditional') && e.hoursPerWeek >= 30;
+    return status.status === 'qualifies' || status.status === 'conditional';
   });
 
-  const hasAutoQualifying = profile.employment.some(
-    (e) => (e.category === '501(c)(3) Non-Profit' || e.category === 'Government (Federal/State/Local/Tribal)') && e.hoursPerWeek >= 30
-  );
+  const totalQualifyingHours = qualifyingEmployers.reduce((sum, e) => sum + e.hoursPerWeek, 0);
+  const isMultiEmployer = qualifyingEmployers.length > 1;
 
-  const hasConditional = profile.employment.some(
-    (e) => e.category === 'Other Public Service Non-Profit (Non-501c3)' && e.hoursPerWeek >= 30
-  );
+  const hasAutoQualifying = qualifyingEmployers.some(
+    (e) => e.category === '501(c)(3) Non-Profit' || e.category === 'Government (Federal/State/Local/Tribal)'
+  ) && totalQualifyingHours >= 30;
+
+  const hasConditional = qualifyingEmployers.some(
+    (e) => e.category === 'Other Public Service Non-Profit (Non-501c3)'
+  ) && totalQualifyingHours >= 30;
 
   if (hasAutoQualifying) {
     score += 35;
@@ -385,7 +388,9 @@ export function calculateReadinessScore(profile: BorrowerProfile): {
       points: 35,
       maxPoints: 35,
       status: 'passed',
-      note: 'Verified 501(c)(3) or Government agency meeting the 30+ hr/wk standard.',
+      note: isMultiEmployer
+        ? `Qualified via Concurrent Part-Time Aggregation (${totalQualifyingHours} combined hrs/wk across ${qualifyingEmployers.length} qualifying employers under 34 CFR § 685.219).`
+        : 'Verified 501(c)(3) or Government agency meeting the 30+ hr/wk statutory standard.',
     });
   } else if (hasConditional) {
     score += 22;
@@ -404,7 +409,9 @@ export function calculateReadinessScore(profile: BorrowerProfile): {
       points: 0,
       maxPoints: 35,
       status: 'failed',
-      note: 'Current employer is for-profit or does not meet the 30-hour full-time threshold.',
+      note: totalQualifyingHours < 30
+        ? `Total qualifying hours (${totalQualifyingHours} hrs/wk) is under the 30-hour statutory threshold.`
+        : 'Current employer is for-profit or not a qualifying tax-exempt public entity.',
     });
   }
 

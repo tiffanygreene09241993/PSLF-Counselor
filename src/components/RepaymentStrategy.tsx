@@ -25,6 +25,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { PslfBuybackScreener } from './PslfBuybackScreener';
+import { DualTaxStrategyComparison } from './DualTaxStrategyComparison';
 
 interface RepaymentStrategyProps {
   profile: BorrowerProfile;
@@ -67,6 +69,14 @@ export const RepaymentStrategy: React.FC<RepaymentStrategyProps> = ({
     onUpdateProfile({
       ...profile,
       filingStatus: status,
+    });
+  };
+
+  const handleUpdateSpouseDetails = (spouseAgi: number, spouseDebt: number) => {
+    onUpdateProfile({
+      ...profile,
+      spouseAgi,
+      spouseDebt,
     });
   };
 
@@ -211,6 +221,13 @@ export const RepaymentStrategy: React.FC<RepaymentStrategyProps> = ({
           </div>
         )}
       </div>
+
+      {/* PSLF Buyback Qualification Screener & Valuation Flow */}
+      <PslfBuybackScreener
+        profile={profile}
+        standardQuote={standardQuote}
+        ibrQuote={recommendedQuote}
+      />
 
       {/* Interactive IDR Savings Estimator Controls */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
@@ -427,6 +444,12 @@ export const RepaymentStrategy: React.FC<RepaymentStrategyProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Dual-Scenario Tax Strategy Comparison (MFS vs. MFJ) */}
+        <DualTaxStrategyComparison
+          profile={profile}
+          onUpdateSpouseDetails={handleUpdateSpouseDetails}
+        />
 
         {/* Action to proceed */}
         {onNavigateNext && (

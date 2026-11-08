@@ -51,8 +51,10 @@ export interface BorrowerProfile {
   occupation: string;
   agi: number; // Adjusted Gross Income
   spouseAgi?: number;
+  spouseDebt?: number;
   familySize: number;
   region: USRegion;
+  homeState?: string;
   filingStatus: MaritalFilingStatus;
   annualIncomeGrowthRate: number; // e.g. 3 for 3%
   loans: StudentLoan[];
