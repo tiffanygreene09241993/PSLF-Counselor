@@ -1,0 +1,8 @@
+{
+  "name": "PSLF & Federal Student Loan Counselor",
+  "description": "Independent student loan counselor tool for Public Service Loan Forgiveness (PSLF) eligibility audit, Direct consolidation analysis, IDR vs Standard repayment strategy comparison, and official StudentAid.gov certification roadmap.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
